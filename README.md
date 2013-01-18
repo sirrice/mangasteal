@@ -17,11 +17,15 @@ Dependencies
 Steps to use:
 
 1) Scrape for images
+
     node download_mangafox.js [mangafox manga URL]
     cd [manga name]/
-3) Convert jpgs into pdfs
+
+2) Convert jpgs into pdfs
+
     ls **/*.jpg | xargs morgify --format pdf
     cd ..
-5) Create PDF file (temporary chapters and volumes in /tmp/[manga name])
+
+3) Create PDF file (temporary chapters and volumes in /tmp/[manga name])
     python topdf.py [manga name]/
 
