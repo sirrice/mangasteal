@@ -27,38 +27,31 @@ def merge_pdf(fname, pdfs):
 
 
 def chapter_pdf(fname, pdfs, check_rotate=False):
-    latex = """
-    \\documentclass{article}
-    \\usepackage{pdfpages}
-    \\begin{document}
-    %s
-    \\end{document}
     """
-    includes = []
-    for pdf in pdfs:
-        if check_rotate:
-            try:
-                img = Image.open(pdf[:-4] + '.jpg')
-            except Exception as e:
-                print e
-                continue
-            w,h = img.size
+    Pretty much the same as merge_pdf but rotates images to fill the page
+    """
+    output = PdfFileWriter()
+    rfiles = [file(pdf, 'rb') for pdf in pdfs]
+    for rf in rfiles:
+        r = PdfFileReader(rf)
+        for i in r.pages:
+            w, h = i.artBox.getWidth(), i.artBox.getHeight()
             if w > h:
-                includes.append('\immediate\includepdf[landscape, angle=-90]{%s}' % pdf)
-            else:
-                includes.append('\immediate\includepdf[landscape]{%s}' % pdf)
-        else:
-            includes.append('\immediate\includepdf[landscape]{%s}' % pdf)
+                i.rotateClockwise(90)
+            output.addPage(i)
 
-    latex = latex % '\n'.join(includes)
-    with file('./latex.tex', 'w') as f:
-        f.write(latex)
-    os.system('pdflatex latex.tex > latex.err 2> latex.err; mv latex.pdf %s' % fname)
+    with file(fname, 'wb') as outf:
+        output.write(outf)
+    for rf in rfiles:
+        rf.close()
 
-def create_chapters(manga_root_dir, outdir, create=True):
+
+def create_chapters(manga_root_dir, outdir, create=True, debug=False):
     """
     chapters are written into temporary files in /tmp/{manga_root_dir}
     """
+    outdir = os.path.join(outdir, 'chapters')
+    os.system('mkdir -p %s' % outdir)
 
     volumes = defaultdict(list)
     for dirpath, dirnames, fnames in os.walk('./'):
@@ -68,7 +61,7 @@ def create_chapters(manga_root_dir, outdir, create=True):
 
 
         folders = dirpath[2:].split('/')
-        vol = folders[0]
+        vol = folders[-2]
         fpath = '_'.join(folders)
         fpath = os.path.join(outdir, '%s.pdf' % fpath)
         print fpath
@@ -77,29 +70,33 @@ def create_chapters(manga_root_dir, outdir, create=True):
         if create:
             chapter_pdf(fpath, pdfs, True)
         volumes[vol].append(fpath)
+
+        if debug:
+            break
+
     return volumes
 
 
-def create_manga(manga_root_dir, build_chapters=True):
+def create_manga(manga_root_dir, outdir, build_chapters=True, debug=False):
     """
     @param volumes mapping from volume name to list of chapter pdfs
     """
     manganame = re.sub('[^\w\s]', '', manga_root_dir.lower()).replace(' ', '_')
-    outdir = os.path.join('/tmp/', manga_root_dir)
     os.system('mkdir -p %s' % outdir)
+    voloutdir = os.path.join(outdir, 'vols')
+    os.system('mkdir -p %s' % voloutdir)
 
 
-    volumes = create_chapters(manga_root_dir, outdir,  create=build_chapters)
+    volumes = create_chapters(manga_root_dir, outdir,  create=build_chapters, debug=debug)
 
     # merge chapters into volumes
     volpdfs = []
     for vol, pdfs in volumes.items():
-        print vol
         pdfs.sort()
-        fname = os.path.join(outdir,'%s.pdf' % vol)
+        fname = os.path.join(voloutdir,'%s.pdf' % vol)
         volpdfs.append(fname)
+        print fname
         merge_pdf(fname, pdfs)
-
 
     # merge volumes into manga
     merge_pdf('./%s.pdf' % manganame, sorted(volpdfs))
@@ -107,6 +104,19 @@ def create_manga(manga_root_dir, build_chapters=True):
 
 
 if __name__ == '__main__':
-    print sys.argv
-    manga_root_dir = sys.argv[1]
-    create_manga(manga_root_dir)
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Create a manga PDF using directory of images scraped from MangaFox')
+    parser.add_argument('-c', '--chapters', action='store_const', const=True, default=False, help='Should recreate new chapters?')
+    parser.add_argument('-d', '--debug', action='store_const', const=True, default=False, help='render a single chapter')
+    parser.add_argument('-o', '--output', default=None, help="Directory to output intermediate files")
+    parser.add_argument('manga_root_dir')
+    ns = parser.parse_args()
+
+
+    build_chapters = ns.chapters
+    manga_root_dir = ns.manga_root_dir
+    debug = ns.debug
+    outdir = ns.output or os.path.join('/tmp/', manga_root_dir)
+
+    create_manga(manga_root_dir, outdir, build_chapters=True, debug=debug)
