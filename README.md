@@ -3,7 +3,8 @@ mangasteal
 
 Manga Scraper and PDF generator
 
-Scrapes images from mangafox and turns downloaded images into single PDF file.
+Scrapes images from [mangafox](http://www.mangafox.com) and turns downloaded
+images into single PDF file.
 
 Usage
 =========
